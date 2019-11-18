@@ -1,0 +1,462 @@
+---
+title: "Prediction of GDP Expansion or Contraction from CLI"
+author: "John Balzani"
+date: "11/15/2019"
+output: pdf_document
+---
+
+```{r load libraries, include=FALSE}
+library(tidyverse)
+library(dynlm)
+library(lmtest)
+library(Metrics)
+library(lubridate)
+library(stargazer)
+library(broom)
+library(readr)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r import gdp data, include=FALSE}
+A191RL1Q225SBEA <- read_csv("C:/Users/John/OneDrive/Documents/Economics Study/Econometrics/Economic-Growth-or-Contraction-Prediction/data/0-raw/A191RL1Q225SBEA.csv")
+```
+
+```{r, include=FALSE}
+OECDLOLITOAASTSAM <- read_csv("C:/Users/John/OneDrive/Documents/Economics Study/Econometrics/Economic-Growth-or-Contraction-Prediction/data/0-raw/OECDLOLITOAASTSAM.csv")
+```
+
+```{r get qtly data}
+#get 1st date of each month
+CLI_filtered <- OECDLOLITOAASTSAM %>% 
+  filter(DATE >= '1982-01-01') %>%
+  mutate(MONTH = month(DATE)) %>% #extract month
+  filter(MONTH %in% c(1, 4, 7, 10))#filter for months with qtly gdp data
+```
+
+
+```{r combined data}
+#must have same number of rows first
+combined_data_cli <- A191RL1Q225SBEA %>%
+  mutate(MONTH = CLI_filtered$MONTH, CLI = CLI_filtered$OECDLOLITOAASTSAM) %>%
+  mutate(CLI = CLI_filtered$OECDLOLITOAASTSAM) %>%
+  mutate(real_gdp_growth = A191RL1Q225SBEA)  %>% #rename col
+  mutate(gdp_impr = ifelse(real_gdp_growth > 0, 1, 0),
+         mean_gdp_impr = mean(gdp_impr)) %>% #make gdp_impr & its mean
+  mutate(real_gdp_growth_lag = lag(real_gdp_growth),
+         real_gdp_growth_lag2 = lag(real_gdp_growth, 2),
+         real_gdp_growth_lag3 = lag(real_gdp_growth, 3),
+         real_gdp_growth_lag4 = lag(real_gdp_growth, 4)) %>%
+  mutate(CLI_lag = lag(CLI),
+         CLI_lag2 = lag(CLI, 2),
+         CLI_lag3 = lag(CLI, 3),
+         CLI_lag4 = lag(CLI, 4),
+         CLI_lag5 = lag(CLI, 5),
+         CLI_lag6 = lag(CLI, 6),
+         CLI_lag7 = lag(CLI, 7),
+         CLI_lag8 = lag(CLI, 8)) %>%
+  mutate(delta_real_gdp_growth = real_gdp_growth - real_gdp_growth_lag,
+         delta_real_gdp_growth_lag = real_gdp_growth_lag - lag(real_gdp_growth_lag),
+         delta_real_gdp_growth_lag2 = real_gdp_growth_lag2 - lag(real_gdp_growth_lag2), 
+         delta_real_gdp_growth_lag3 = real_gdp_growth_lag3 - lag(real_gdp_growth_lag3),
+         delta_real_gdp_growth_lag4 = real_gdp_growth_lag4 - lag(real_gdp_growth_lag4)) %>%
+  mutate(delta_CLI = CLI - CLI_lag,
+         delta_CLI_lag = CLI_lag - CLI_lag2,
+         delta_CLI_lag2 = CLI_lag2 - CLI_lag3,
+         delta_CLI_lag3 = CLI_lag3 - lag(CLI_lag3),
+         delta_CLI_lag4 = CLI_lag4 - lag(CLI_lag4),
+         delta_CLI_lag5 = CLI_lag5 - lag(CLI_lag5),
+         delta_CLI_lag6 = CLI_lag6 - lag(CLI_lag6),
+         delta_CLI_lag7 = CLI_lag7 - lag(CLI_lag7),
+         delta_CLI_lag8 = CLI_lag8 - lag(CLI_lag8))
+```
+
+```{r filter data}
+combined_data_filtered <- combined_data_cli %>% filter(DATE >= "1983-01-01" & DATE < "2008-07-01") #filter to include all lags and up to 2008 recession
+```
+
+
+Summary:
+\newline
+The Composite Leading Index (CLI) is an index composed of various indicators that are thought to have predictive value for the US economy. The purpose of this report is to see if the CLI can predict the direction of economic growth in the upcoming 3 quarters. In particular, one of the purposes of this research is to explore if these predictions can be made accurately for the 2008 recession and current post-2008 recession business cycle. Data from 1983 to April 2008 are used to estimate the model, and data from July 2008 to July 2019 are used to evaluate the model. Logit models of all 3 lags of the CLI, of lags 2 and 3 of the CLI, of lags 1 and 2 of the CLI, and of lags 1,2, and 3 individually are tested for significance in predicting the direction of economic growth. It is found that a logit model with lags 1, 2, and 3 of the CLI is the best out of these models for predicting economic growth or contraction, with a McFadden R squared of .489. This logit model has a hit rate of 93.3% during the evaluation period, which is quite good. This model outperforms a simple strategy of predicting economic growth for every period, which would give a hit rate of 84.4% for this time period.
+
+Plot of Real GDP Growth and CLI 1983 - July 2008:
+
+```{r plot}
+combined_data_filtered %>% ggplot(aes(x = DATE)) +
+  geom_line(aes(y = CLI, color = "CLI")) +
+  geom_line(aes(y = real_gdp_growth, color = "real_gdp_growth")) +
+  ggtitle("Figure 1: Real GDP Growth and CLI 1983-Apr 2008")
+```
+
+```{r}
+combined_data_filtered_ts <- combined_data_filtered %>% ts()
+```
+
+For the unrestricted model, the 3 most recent lagged values of the CLI and the 3 most recent lagged values of real GDP growth are tested. A 5% level of significance is used for all tests throughout the study.
+
+Test for Stationarity - Augmented Dickey-Fuller (ADF) Test for Real GDP Growth:
+
+First an ADF test is performed to test whether or not real GDP growth is stationary.
+
+Model for ADF test:
+delta_real_gdp_growth = alpha_adf_1 + rho*real_gdp_growth_lag + gamma_adf_1*delta_real_gdp_growth_lag + gamma_adf_2*delta_real_gdp_growth_lag2 + gamma_adf_3*delta_real_gdp_growth_lag3 + epsilon_adf_1
+
+Note: Starting with ADF test for all 4 lags of delta_real_gdp_growth.
+
+ADF test for lags 1-4 of delta_real_gdp_growth:
+
+```{r adf test gdp lag 4}
+reg_gdp_adf_lags1234 <- dynlm(delta_real_gdp_growth~real_gdp_growth_lag + delta_real_gdp_growth_lag + delta_real_gdp_growth_lag2 + delta_real_gdp_growth_lag3 + delta_real_gdp_growth_lag4, data = combined_data_filtered_ts)
+reg_gdp_adf_lags1234summ <- summary(reg_gdp_adf_lags1234)
+reg_gdp_adf_lags1234summ
+```
+
+Conclusion: ADF test should be repeated with lag length of 3, as the absolute value of the t statistic of the last lagged value is less than 1.6.
+Rule of Thumb: Set a maximum value for the lag length, and estimate the test regression with that lag length. If the the absolute value of the last lagged value in the test regression is less than 1.6, then reduce the lag length by one and retest (Ng and Perron “Lag Length Selection and the Construction of Unit Root Tests with Good Size and Power,”
+ECTA, 2001.).
+\newpage
+ADF test with lags 1-3 of delta_real_gdp_growth:
+
+```{r adf test gdp lag 3}
+reg_gdp_adf_lags123 <- dynlm(delta_real_gdp_growth~real_gdp_growth_lag + delta_real_gdp_growth_lag + delta_real_gdp_growth_lag2 + delta_real_gdp_growth_lag3, data = combined_data_filtered_ts)
+reg_gdp_adf_lags123summ <- summary(reg_gdp_adf_lags123)
+reg_gdp_adf_lags123summ
+```
+
+Conclusion: The ADF test should be repeated with lag length 2, as the absolute value of the t statistic of the last lagged value is less than 1.6.
+\newpage
+ADF test with lags 1 and 2 of delta_real_gdp_growth:
+
+```{r adf test gdp lag 2}
+reg_gdp_adf_lags12 <- dynlm(delta_real_gdp_growth~real_gdp_growth_lag + delta_real_gdp_growth_lag + delta_real_gdp_growth_lag2, data = combined_data_filtered_ts)
+reg_gdp_adf_lags12summ <- summary(reg_gdp_adf_lags12)
+reg_gdp_adf_lags12summ
+```
+
+Conclusion: The ADF test should be repeated with lag length 2, as the absolute value of the t statistic of the last lagged value is less than 1.6.
+\newpage
+ADF test with lag 1 of delta_real_gdp_growth:
+
+```{r adf test gdp lag 1}
+reg_gdp_adf_lag1 <- dynlm(delta_real_gdp_growth~real_gdp_growth_lag + delta_real_gdp_growth_lag, data = combined_data_filtered_ts)
+reg_gdp_adf_lag1summ <- summary(reg_gdp_adf_lag1)
+reg_gdp_adf_lag1summ
+```
+
+Conclusion:
+The t value of real_gdp_growth_lag is ```r reg_gdp_adf_lag1summ$coefficients[2, 3]```, which is below the critical value of -2.9, so we reject the null hypothesis of non-stationarity of real GDP growth. Real GDP growth is stationary.
+
+Test for Stationarity - Augmented Dickey-Fuller Test for CLI:
+
+Model for ADF test:
+delta_CLI = alpha_adf_2 + rho1*CLI_lag + beta_adf_1*delta_CLI_lag + beta_adf_2*delta_CLI_lag_2 + beta_adf_3*delta_CLI_lag3 + beta_adf_4*delta_CLI_lag4 + epsilon_adf_2
+
+Note: Starting with ADF test for 4 lags of delta_CLI, since it is most commonly used as a predictor of economic conditions in the following 6-9 months.
+\newpage
+ADF test with lags 1-4 of delta_CLI:
+
+```{r adf test CLI 4 lags}
+reg_CLI_lags1234 <- dynlm(delta_CLI~CLI_lag + delta_CLI_lag + delta_CLI_lag2 + delta_CLI_lag3 + delta_CLI_lag4, data = combined_data_filtered_ts)
+reg_CLI_lags1234summ <- summary(reg_CLI_lags1234)
+reg_CLI_lags1234summ
+```
+
+Conclusion: ADF test should be repeated with larger lag length, as the absolute value of the t statistic of the last lagged value is greater than 1.6.
+Rule of Thumb: Set a maximum value for the lag length, and estimate the test regression with that lag length. If the the absolute value of the last lagged value in the test regression is less than 1.6, then reduce the lag length by one and retest (Ng and Perron “Lag Length Selection and the Construction of Unit Root Tests with Good Size and Power,”
+ECTA, 2001.).
+\newpage
+ADF test with lags 1-8 of delta_CLI:
+
+```{r adf test CLI 8 lags}
+reg_CLI_8lags <- dynlm(delta_CLI~CLI_lag + delta_CLI_lag + delta_CLI_lag2 + delta_CLI_lag3 + delta_CLI_lag4 + delta_CLI_lag5 + delta_CLI_lag6 + delta_CLI_lag7 + delta_CLI_lag8, data = combined_data_filtered_ts)
+reg_CLI_8lagssumm <- summary(reg_CLI_8lags)
+reg_CLI_8lagssumm
+```
+
+
+Conclusion: The ADF test should be repeated with lag length 7, as the absolute value of the t statistic of the last lagged value is less than 1.6.
+\newpage
+ADF test with lags 1-7 of delta_CLI:
+
+```{r adf test CLI 7 lags}
+reg_CLI_7lags <- dynlm(delta_CLI~CLI_lag + delta_CLI_lag + delta_CLI_lag2 + delta_CLI_lag3 + delta_CLI_lag4 + delta_CLI_lag5 + delta_CLI_lag6 + delta_CLI_lag7, data = combined_data_filtered_ts)
+reg_CLI_7lagssumm <- summary(reg_CLI_7lags)
+reg_CLI_7lagssumm
+```
+
+Conclusion: The ADF test should be repeated with lag length 6, as the absolute value of the t statistic of the last lagged value is less than 1.6.
+\newpage
+ADF test with lags 1-6 of delta_CLI:
+
+```{r adf test CLI 6 lags}
+reg_CLI_6lags <- dynlm(delta_CLI~CLI_lag + delta_CLI_lag + delta_CLI_lag2 + delta_CLI_lag3 + delta_CLI_lag4 + delta_CLI_lag5 + delta_CLI_lag6, data = combined_data_filtered_ts)
+reg_CLI_6lagssumm <- summary(reg_CLI_6lags)
+reg_CLI_6lagssumm
+```
+
+Conclusion: The ADF test should be repeated with lag length 5, as the absolute value of the t statistic of the last lagged value is less than 1.6.
+\newpage
+ADF test with lags 1-5 of delta_CLI:
+
+```{r adf test CLI 5 lags}
+reg_CLI_5lags <- dynlm(delta_CLI~CLI_lag + delta_CLI_lag + delta_CLI_lag2 + delta_CLI_lag3 + delta_CLI_lag4 + delta_CLI_lag5, data = combined_data_filtered_ts)
+reg_CLI_5lagssumm <- summary(reg_CLI_5lags)
+reg_CLI_5lagssumm
+```
+
+The t stat of CLI_lag is ```r reg_CLI_5lagssumm$coefficients[2,3]```, which is below the critical value of -2.9, so we reject the null hypothesis of non-stationarity. CLI is stationary.
+
+Granger Causality:
+\newline
+Granger Causality of Real GDP Growth:
+
+```{r unrestricted model 1}
+reg_ur <- dynlm(real_gdp_growth~real_gdp_growth_lag + real_gdp_growth_lag2 + real_gdp_growth_lag3 + CLI_lag + CLI_lag2 + CLI_lag3, data = combined_data_filtered_ts)
+reg_ur_summ <- summary(reg_ur)
+```
+
+```{r restricted model 1}
+reg_r <- dynlm(real_gdp_growth~real_gdp_growth_lag + real_gdp_growth_lag2 + real_gdp_growth_lag3, data = combined_data_filtered_ts)
+reg_r_summ <- summary(reg_r)
+```
+
+```{r F test 1}
+R1sqd <- reg_ur_summ$r.squared
+R0sqd <- reg_r_summ$r.squared
+g <- 3
+n <- nrow(combined_data_filtered_ts)
+k <- 7
+F_stat <- ((R1sqd - R0sqd)/g)/((1-R1sqd)/(n-k))
+```
+
+p value of F statistic:
+
+```{r}
+round(pf(F_stat, g, n-k, lower.tail = FALSE), 3)
+```
+
+Conclusion: This is below 0.05, so we reject the null hypothesis of no Granger causality. The level of the CLI Granger-causes real GDP growth. If the level of the CLI Granger-causes real GDP growth, then the level of the CLI may also Granger-cause improvement or contraction of the economy.
+
+Granger Causality of gdp_impr, a binary {0,1} variable where 0 indicates economic contraction and 1 indicates economic growth:
+
+```{r unrestricted model 2}
+reg_ur2 <- dynlm(gdp_impr~real_gdp_growth_lag + real_gdp_growth_lag2 + real_gdp_growth_lag3 + CLI_lag + CLI_lag2 + CLI_lag3, data = combined_data_filtered_ts)
+reg_ur2summ <- summary(reg_ur)
+```
+
+```{r restricted model 2}
+reg_r2 <- dynlm(real_gdp_growth~real_gdp_growth_lag + real_gdp_growth_lag2 + real_gdp_growth_lag3, data = combined_data_filtered_ts)
+reg_r2summ <- summary(reg_r)
+```
+
+```{r F test 2}
+R1sqd2 <- reg_ur2summ$r.squared
+R0sqd2 <- reg_r2summ$r.squared
+g <- 3
+n <- nrow(combined_data_filtered_ts)
+k <- 7
+F_stat <- ((R1sqd2 - R0sqd2)/g)/((1-R1sqd2)/(n-k))
+```
+\newpage
+p value of F statistic:
+
+```{r}
+round(pf(F_stat, g, n-k, lower.tail = FALSE), 4)
+```
+
+Conclusion: This is below 0.05, so we reject the null hypothesis of no Granger causality. The level of the CLI Granger-causes gdp_impr.
+
+```{r logit models}
+logit_model_constant <- glm(formula = gdp_impr~mean_gdp_impr, family = binomial(link = "logit"), data = combined_data_filtered)
+
+logit_model_lags123 <- glm(formula = gdp_impr~CLI_lag + CLI_lag2 + CLI_lag3, family = binomial(link = "logit"), data = combined_data_filtered)
+
+logit_model_lags12 <- glm(formula = gdp_impr~CLI_lag + CLI_lag2, family = binomial(link = "logit"), data = combined_data_filtered)
+
+logit_model_lags23 <- glm(formula = gdp_impr~CLI_lag2 + CLI_lag3, family = binomial(link = "logit"), data = combined_data_filtered)
+
+logit_model_lag1 <- glm(formula = gdp_impr~CLI_lag + CLI_lag3, family = binomial(link = "logit"), data = combined_data_filtered)
+
+logit_model_lag2 <- glm(formula = gdp_impr~CLI_lag2, family = binomial(link = "logit"), data = combined_data_filtered)
+
+logit_model_lag3 <- glm(formula = gdp_impr~CLI_lag3, family = binomial(link = "logit"), data = combined_data_filtered)
+```
+
+
+```{r Log Likelihood values}
+loglike_constant <- logLik(logit_model_constant)
+loglike_lags123 <- logLik(logit_model_lags123)
+loglike_lags12 <- logLik(logit_model_lags12)
+loglike_lags23 <- logLik(logit_model_lags23)
+loglike_lag1 <- logLik(logit_model_lag1)
+loglike_lags2 <- logLik(logit_model_lag2)
+loglike_lags3 <- logLik(logit_model_lag3)
+```
+
+```{r Likelihood Ratio test}
+LR_stat_lags123 <- lrtest(logit_model_constant, logit_model_lags123) #(restricted, unrestricted) to prove the joint significance of lags 1,2, and 3
+#to prove joint significance of lags 1 and 2
+LR_stat_lags12 <- lrtest(logit_model_lags12, logit_model_lags123)
+#to prove joint significance of lags 2 and 3
+LR_stat_lags23 <- lrtest(logit_model_lags23, logit_model_lags123)
+#to prove significance of lag 1
+LR_stat_lag1 <- lrtest(logit_model_lag1, logit_model_lags123)
+#to prove significance of lag 2
+LR_stat_lag2 <- lrtest(logit_model_lag2, logit_model_lags123)
+#to prove significance of lag 3
+LR_stat_lag3 <- lrtest(logit_model_lag3, logit_model_lags123)
+```
+    
+Likelihood Ratio Statistics:
+Null hypothesis H0: not all indicators are significant
+Alternate hypothesis H1: all indicators significant
+
+LR Statistic for model with lags 1,2, and 3:
+
+```{r}
+LR_stat_lags123
+```
+
+Conclusion: This model is significant at the 1% level.
+
+LR Statistic for model with lags 1 and 2:
+
+```{r}
+LR_stat_lags12
+```
+
+Conclusion: This model is not significant at the 5% level.
+
+
+LR Statistic for model with lags 2 and 3:
+
+```{r}
+LR_stat_lags23
+```
+
+Conclusion: This model is significant at the 5% level.
+
+LR Statistic for model with lag 1:
+
+```{r}
+LR_stat_lag1
+```
+
+Conclusion: This model is not significant at the 5% level.
+
+LR Statistic for model with lag 2:
+
+```{r}
+LR_stat_lag2
+```
+
+Conclusion: This model is significant at the 1% level.
+
+LR Statistic for model with lag 3:
+
+```{r}
+LR_stat_lag3
+```
+
+Conclusion: This model is significant at the 1% level.
+
+Model Comparison:
+
+McFadden R Squared Values for Significant Models:
+
+Model with lags 1, 2, and 3:
+
+```{r}
+mcfRsqd_lags123 <- 1 - logit_model_lags123$deviance/logit_model_lags123$null.deviance
+round(mcfRsqd_lags123, 4)
+```
+
+Model with lags 2 and 3:
+
+```{r}
+mcfRsqd_lags23 <- 1 - logit_model_lags23$deviance/logit_model_lags23$null.deviance
+round(mcfRsqd_lags23, 4)
+```
+
+Model with lag 2:
+
+```{r}
+mcfRsqd_lag2 <- 1 - logit_model_lag2$deviance/logit_model_lag2$null.deviance
+round(mcfRsqd_lag2, 4)
+```
+
+Model with lag 3:
+
+```{r}
+mcfRsqd_lag3 <- 1 - logit_model_lag3$deviance/logit_model_lag3$null.deviance
+round(mcfRsqd_lag3, 4)
+```
+
+The model with lags 1, 2, and 3 is the optimal model as it has the highest McFadden R squared value.
+
+Predictions of Contraction or Growth for Quarters 1-45 Starting July 2008:
+
+```{r filter data for evaulation sample}
+combined_data_eval <- combined_data_cli %>% 
+  filter(DATE > "2008-04-01")
+```
+
+```{r predictions}
+pred_prob_econ_growth <- c(1:nrow(combined_data_eval))
+a <- pred_prob_econ_growth
+
+for (i in 1:nrow(combined_data_eval)) {
+  a[i] <- as.numeric(
+    logit_model_lags123$coefficients[1] +
+      logit_model_lags123$coefficients[2]*combined_data_eval[which(combined_data_eval$DATE == '2008-07-01') + i - 1, 'CLI_lag'] +
+      logit_model_lags123$coefficients[3]*combined_data_eval[which(combined_data_eval$DATE == '2008-07-01') + i - 1, 'CLI_lag2'] +
+      logit_model_lags123$coefficients[4]*combined_data_eval[which(combined_data_eval$DATE == '2008-07-01') + i - 1, 'CLI_lag3']
+  )
+  pred_prob_econ_growth[i] <- exp(a[i])/(1 + exp(a[i]))
+}
+
+
+pred_prob_econ_growth
+```
+
+Prediction-Realization Table:
+
+```{r Prediction-Realization Table}
+#sum predictions
+pred_expansion <- ifelse(pred_prob_econ_growth > 0.5, 1, 0)
+pred1_res1 <- sum(ifelse((pred_expansion==1 & combined_data_eval$gdp_impr==1), 1, 0))
+pred1_res0 <- sum(ifelse(pred_expansion==1 & combined_data_eval$gdp_impr==0, 1, 0))
+pred0_res1 <- sum(ifelse(pred_expansion==0 & combined_data_eval$gdp_impr==1, 1, 0))
+pred0_res0 <- sum(ifelse(pred_expansion==0 & combined_data_eval$gdp_impr==0, 1, 0))
+
+#create p-r table
+m <- length(pred_expansion)
+pred_realize_table <- tibble(
+                        observed = c("0", "1", "sum"),
+                        pred0 = c(round(pred0_res0/m, 3), round(pred0_res1/m, 3),                                               round((pred0_res0 + pred0_res1)/m, 3)),
+                        pred1 = c(round(pred1_res0/m, 3), round(pred1_res1/m, 3),                                               round((pred1_res1 + pred1_res0)/m, 3)),
+                        sum = c(round((pred0_res0 + pred1_res0)/m, 3), round((pred0_res1 +                                    pred1_res1)/m, 3), 1)
+                        )
+pred_realize_table
+```
+
+Hit Rate:
+
+```{r hit rate}
+hit_rate <- as.numeric(pred_realize_table[1,2] + pred_realize_table[2,3])
+hit_rate
+```
+
+
+```{r}
+combined_data_eval <- combined_data_eval %>%
+  mutate(mean_eval_gdp_impr = mean(gdp_impr))
+```
+
+Conclusion:
+
+The hit rate of the model was 0.933, 93.3%. This indicates that the model did a good job of predicting whether or not there would be economic growth from July 2008 - July 2019. This is better than a strategy of simply assuming that there will be economic growth in every period, which would yield a hit rate of 84.4%.
+
