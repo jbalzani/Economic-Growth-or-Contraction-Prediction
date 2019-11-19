@@ -1,7 +1,7 @@
 ---
 title: "Prediction of GDP Expansion or Contraction from CLI"
 author: "John Balzani"
-date: "11/15/2019"
+date: "11/19/2019"
 output: pdf_document
 ---
 
@@ -80,7 +80,7 @@ combined_data_filtered <- combined_data_cli %>% filter(DATE >= "1983-01-01" & DA
 
 Summary:
 \newline
-The Composite Leading Index (CLI) is an index composed of various indicators that are thought to have predictive value for the US economy. The purpose of this report is to see if the CLI can predict the direction of economic growth in the upcoming 3 quarters. In particular, one of the purposes of this research is to explore if these predictions can be made accurately for the 2008 recession and current post-2008 recession business cycle. Data from 1983 to April 2008 are used to estimate the model, and data from July 2008 to July 2019 are used to evaluate the model. Logit models of all 3 lags of the CLI, of lags 2 and 3 of the CLI, of lags 1 and 2 of the CLI, and of lags 1,2, and 3 individually are tested for significance in predicting the direction of economic growth. It is found that a logit model with lags 1, 2, and 3 of the CLI is the best out of these models for predicting economic growth or contraction, with a McFadden R squared of .489. This logit model has a hit rate of 93.3% during the evaluation period, which is quite good. This model outperforms a simple strategy of predicting economic growth for every period, which would give a hit rate of 84.4% for this time period.
+The Composite Leading Index (CLI) is an index composed of various indicators that are thought to have predictive value for the US economy. The purpose of this report is to see if the CLI can predict the direction of economic growth in the upcoming 3 quarters. In particular, one of the purposes of this research is to explore if these predictions can be made accurately for the 2008 recession and current post-2008 recession business cycle. Data from 1983 to April 2008 are used to estimate the model, and data from July 2008 to July 2019 are used to evaluate the model. Probit models of all 3 lags of the CLI, of lags 2 and 3 of the CLI, of lags 1 and 2 of the CLI, and of lags 1,2, and 3 individually are tested for significance in predicting the direction of economic growth. It is found that a probit model with lags 1, 2, and 3 of the CLI is the best out of these models for predicting economic growth or contraction, with a McFadden R squared of .489. This probit model has a hit rate of 93.3% during the evaluation period, which is quite good. This model outperforms a simple strategy of predicting economic growth for every period, which would give a hit rate of 84.4% for this time period.
 
 Plot of Real GDP Growth and CLI 1983 - July 2008:
 
@@ -269,45 +269,45 @@ round(pf(F_stat, g, n-k, lower.tail = FALSE), 4)
 
 Conclusion: This is below 0.05, so we reject the null hypothesis of no Granger causality. The level of the CLI Granger-causes gdp_impr.
 
-```{r logit models}
-logit_model_constant <- glm(formula = gdp_impr~mean_gdp_impr, family = binomial(link = "logit"), data = combined_data_filtered)
+```{r probit models}
+probit_model_constant <- glm(formula = gdp_impr~mean_gdp_impr, family = binomial(link = "probit"), data = combined_data_filtered)
 
-logit_model_lags123 <- glm(formula = gdp_impr~CLI_lag + CLI_lag2 + CLI_lag3, family = binomial(link = "logit"), data = combined_data_filtered)
+probit_model_lags123 <- glm(formula = gdp_impr~CLI_lag + CLI_lag2 + CLI_lag3, family = binomial(link = "probit"), data = combined_data_filtered)
 
-logit_model_lags12 <- glm(formula = gdp_impr~CLI_lag + CLI_lag2, family = binomial(link = "logit"), data = combined_data_filtered)
+probit_model_lags12 <- glm(formula = gdp_impr~CLI_lag + CLI_lag2, family = binomial(link = "probit"), data = combined_data_filtered)
 
-logit_model_lags23 <- glm(formula = gdp_impr~CLI_lag2 + CLI_lag3, family = binomial(link = "logit"), data = combined_data_filtered)
+probit_model_lags23 <- glm(formula = gdp_impr~CLI_lag2 + CLI_lag3, family = binomial(link = "probit"), data = combined_data_filtered)
 
-logit_model_lag1 <- glm(formula = gdp_impr~CLI_lag + CLI_lag3, family = binomial(link = "logit"), data = combined_data_filtered)
+probit_model_lag1 <- glm(formula = gdp_impr~CLI_lag + CLI_lag3, family = binomial(link = "probit"), data = combined_data_filtered)
 
-logit_model_lag2 <- glm(formula = gdp_impr~CLI_lag2, family = binomial(link = "logit"), data = combined_data_filtered)
+probit_model_lag2 <- glm(formula = gdp_impr~CLI_lag2, family = binomial(link = "probit"), data = combined_data_filtered)
 
-logit_model_lag3 <- glm(formula = gdp_impr~CLI_lag3, family = binomial(link = "logit"), data = combined_data_filtered)
+probit_model_lag3 <- glm(formula = gdp_impr~CLI_lag3, family = binomial(link = "probit"), data = combined_data_filtered)
 ```
 
 
 ```{r Log Likelihood values}
-loglike_constant <- logLik(logit_model_constant)
-loglike_lags123 <- logLik(logit_model_lags123)
-loglike_lags12 <- logLik(logit_model_lags12)
-loglike_lags23 <- logLik(logit_model_lags23)
-loglike_lag1 <- logLik(logit_model_lag1)
-loglike_lags2 <- logLik(logit_model_lag2)
-loglike_lags3 <- logLik(logit_model_lag3)
+loglike_constant <- logLik(probit_model_constant)
+loglike_lags123 <- logLik(probit_model_lags123)
+loglike_lags12 <- logLik(probit_model_lags12)
+loglike_lags23 <- logLik(probit_model_lags23)
+loglike_lag1 <- logLik(probit_model_lag1)
+loglike_lags2 <- logLik(probit_model_lag2)
+loglike_lags3 <- logLik(probit_model_lag3)
 ```
 
 ```{r Likelihood Ratio test}
-LR_stat_lags123 <- lrtest(logit_model_constant, logit_model_lags123) #(restricted, unrestricted) to prove the joint significance of lags 1,2, and 3
+LR_stat_lags123 <- lrtest(probit_model_constant, probit_model_lags123) #(restricted, unrestricted) to prove the joint significance of lags 1,2, and 3
 #to prove joint significance of lags 1 and 2
-LR_stat_lags12 <- lrtest(logit_model_lags12, logit_model_lags123)
+LR_stat_lags12 <- lrtest(probit_model_lags12, probit_model_lags123)
 #to prove joint significance of lags 2 and 3
-LR_stat_lags23 <- lrtest(logit_model_lags23, logit_model_lags123)
+LR_stat_lags23 <- lrtest(probit_model_lags23, probit_model_lags123)
 #to prove significance of lag 1
-LR_stat_lag1 <- lrtest(logit_model_lag1, logit_model_lags123)
+LR_stat_lag1 <- lrtest(probit_model_lag1, probit_model_lags123)
 #to prove significance of lag 2
-LR_stat_lag2 <- lrtest(logit_model_lag2, logit_model_lags123)
+LR_stat_lag2 <- lrtest(probit_model_lag2, probit_model_lags123)
 #to prove significance of lag 3
-LR_stat_lag3 <- lrtest(logit_model_lag3, logit_model_lags123)
+LR_stat_lag3 <- lrtest(probit_model_lag3, probit_model_lags123)
 ```
     
 Likelihood Ratio Statistics:
@@ -370,28 +370,28 @@ McFadden R Squared Values for Significant Models:
 Model with lags 1, 2, and 3:
 
 ```{r}
-mcfRsqd_lags123 <- 1 - logit_model_lags123$deviance/logit_model_lags123$null.deviance
+mcfRsqd_lags123 <- 1 - probit_model_lags123$deviance/probit_model_lags123$null.deviance
 round(mcfRsqd_lags123, 4)
 ```
 
 Model with lags 2 and 3:
 
 ```{r}
-mcfRsqd_lags23 <- 1 - logit_model_lags23$deviance/logit_model_lags23$null.deviance
+mcfRsqd_lags23 <- 1 - probit_model_lags23$deviance/probit_model_lags23$null.deviance
 round(mcfRsqd_lags23, 4)
 ```
 
 Model with lag 2:
 
 ```{r}
-mcfRsqd_lag2 <- 1 - logit_model_lag2$deviance/logit_model_lag2$null.deviance
+mcfRsqd_lag2 <- 1 - probit_model_lag2$deviance/probit_model_lag2$null.deviance
 round(mcfRsqd_lag2, 4)
 ```
 
 Model with lag 3:
 
 ```{r}
-mcfRsqd_lag3 <- 1 - logit_model_lag3$deviance/logit_model_lag3$null.deviance
+mcfRsqd_lag3 <- 1 - probit_model_lag3$deviance/probit_model_lag3$null.deviance
 round(mcfRsqd_lag3, 4)
 ```
 
@@ -410,10 +410,10 @@ a <- pred_prob_econ_growth
 
 for (i in 1:nrow(combined_data_eval)) {
   a[i] <- as.numeric(
-    logit_model_lags123$coefficients[1] +
-      logit_model_lags123$coefficients[2]*combined_data_eval[which(combined_data_eval$DATE == '2008-07-01') + i - 1, 'CLI_lag'] +
-      logit_model_lags123$coefficients[3]*combined_data_eval[which(combined_data_eval$DATE == '2008-07-01') + i - 1, 'CLI_lag2'] +
-      logit_model_lags123$coefficients[4]*combined_data_eval[which(combined_data_eval$DATE == '2008-07-01') + i - 1, 'CLI_lag3']
+    probit_model_lags123$coefficients[1] +
+      probit_model_lags123$coefficients[2]*combined_data_eval[which(combined_data_eval$DATE == '2008-07-01') + i - 1, 'CLI_lag'] +
+      probit_model_lags123$coefficients[3]*combined_data_eval[which(combined_data_eval$DATE == '2008-07-01') + i - 1, 'CLI_lag2'] +
+      probit_model_lags123$coefficients[4]*combined_data_eval[which(combined_data_eval$DATE == '2008-07-01') + i - 1, 'CLI_lag3']
   )
   pred_prob_econ_growth[i] <- exp(a[i])/(1 + exp(a[i]))
 }
