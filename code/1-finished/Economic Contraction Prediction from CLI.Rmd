@@ -21,11 +21,11 @@ knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r import gdp data, include=FALSE}
-A191RL1Q225SBEA <- read_csv("C:/Users/John/OneDrive/Documents/Economics Study/Econometrics/Economic-Growth-or-Contraction-Prediction/data/0-raw/A191RL1Q225SBEA.csv")
+A191RL1Q225SBEA <- read_csv("C:/Users/John/OneDrive/Documents/Study of Economics/Econometrics/Economic-Growth-or-Contraction-Prediction/data/0-raw/A191RL1Q225SBEA.csv")
 ```
 
-```{r, include=FALSE}
-OECDLOLITOAASTSAM <- read_csv("C:/Users/John/OneDrive/Documents/Economics Study/Econometrics/Economic-Growth-or-Contraction-Prediction/data/0-raw/OECDLOLITOAASTSAM.csv")
+```{r import cli data, include=FALSE}
+OECDLOLITOAASTSAM <- read_csv("C:/Users/John/OneDrive/Documents/Study of Economics/Econometrics/Economic-Growth-or-Contraction-Prediction/data/0-raw/OECDLOLITOAASTSAM.csv")
 ```
 
 ```{r get qtly data}
